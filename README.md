@@ -2,6 +2,9 @@
 
 Optimized primitives for inter-GPU communication.
 
+## About this Fork
+This is a modified version of NCCL, to allow for affinity groups (For now, referenced in the code as "rackID's"), to accomodate for the topology of certain datacenters.
+It allows for Rings and Trees in the NCCL communication pattern to be created with regard to racks of each node, which should perform better when running inter-rack jobs.
 ## Introduction
 
 NCCL (pronounced "Nickel") is a stand-alone library of standard communication routines for GPUs, implementing all-reduce, all-gather, reduce, broadcast, reduce-scatter, as well as any send/receive based communication pattern. It has been optimized to achieve high bandwidth on platforms using PCIe, NVLink, NVswitch, as well as networking using InfiniBand Verbs or TCP/IP sockets. NCCL supports an arbitrary number of GPUs installed in a single node or across multiple nodes, and can be used in either single- or multi-process (e.g., MPI) applications.
