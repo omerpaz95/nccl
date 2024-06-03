@@ -313,6 +313,7 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
     }
     return ncclSuccess;
   }
+  INFO(NCCL_GRAPH, "This is a custom dev build.");
   INFO(NCCL_GRAPH, "Loading topology file %s", xmlTopoFile);
   struct xmlHandler handlers[] = { { "system", ncclTopoXmlLoadSystem } };
   xml->maxIndex = 0;

@@ -393,10 +393,13 @@ ncclResult_t bootstrapAllGather(void* commState, void* allData, int size) {
     size_t rslice = (rank - i - 1 + nranks) % nranks;
     size_t sslice = (rank - i + nranks) % nranks;
 
+    // TRACE(NCCL_INIT, "i %d rslice %d sslice %d", i, rslice, sslice);
     // Send slice to the right
     NCCLCHECK(bootstrapNetSend(&state->ringSendSocket, data+sslice*size, size));
+    // TRACE(NCCL_INIT, "Send DONE.");
     // Recv slice from the left
     NCCLCHECK(bootstrapNetRecv(&state->ringRecvSocket, data+rslice*size, size));
+    // TRACE(NCCL_INIT, "Recv DONE.");
   }
 
   TRACE(NCCL_INIT, "rank %d nranks %d size %d - DONE", rank, nranks, size);

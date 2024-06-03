@@ -387,6 +387,9 @@ struct ncclComm {
 
   // Tuning plugin
   ncclTuner_t* tuner;
+
+  //Omer: Add rack ID:
+  int rackId;
 };
 
 enum ncclLaunchMode {

@@ -795,6 +795,7 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   struct allGatherInfo {
     struct graphInfo graphInfo[NCCL_NUM_ALGORITHMS];
     struct ncclTopoRanks topoRanks;
+    int rack_id;
   };
 
   int nChannelsOrig;
@@ -807,12 +808,13 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   int* pxnPeers = NULL;
   int *topParentLocalRanks = NULL;
   int tpProxyRank;
+  int *rack_ids;
 
   // AllGather1 - begin
   NCCLCHECKGOTO(ncclCalloc(&comm->peerInfo, nranks+1), ret, fail); // Extra rank to represent CollNet root
+  // NCCLCHECKGOTO(ncclCalloc(&comm->peerInfo2, nranks+1), ret, fail); // Extra rank to represent CollNet root
   NCCLCHECKGOTO(fillInfo(comm, comm->peerInfo+rank, comm->commHash), ret, fail);
   NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, comm->peerInfo, sizeof(struct ncclPeerInfo)), ret, fail);
-
   for (int i = 0; i < nranks; i++) {
     if ((i != rank) && (comm->peerInfo[i].hostHash == comm->peerInfo[rank].hostHash) && (comm->peerInfo[i].busId == comm->peerInfo[rank].busId)) {
       WARN("Duplicate GPU detected : rank %d and rank %d both on CUDA device %lx", rank, i, comm->peerInfo[rank].busId);
@@ -953,7 +955,8 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
 
   // AllGather3 - begin
   NCCLCHECKGOTO(ncclCalloc(&allGather3Data, nranks), ret, fail);
-
+  // Omer: Piggyback on allGather3:
+  allGather3Data[rank].rack_id = comm->rackId;
   for (int a=0; a<NCCL_NUM_ALGORITHMS; a++) {
     allGather3Data[rank].graphInfo[a].pattern = graphs[a]->pattern;
     allGather3Data[rank].graphInfo[a].nChannels = graphs[a]->nChannels;
@@ -968,7 +971,6 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
   NCCLCHECKGOTO(ncclTopoPreset(comm, graphs, &allGather3Data[rank].topoRanks), ret, fail);
 
   NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, allGather3Data, sizeof(*allGather3Data)), ret, fail);
-
   // Determine nNodes, firstRanks, ...
   NCCLCHECKGOTO(ncclCalloc(&nodesFirstRank, nranks), ret, fail);
   NCCLCHECKGOTO(ncclCalloc(&nodesTreePatterns, nranks), ret, fail);
@@ -1058,10 +1060,37 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
       }
     }
   }
+  // AllGather3 - end
+  // Omer: After AllGather3 gave us our nodeId, we can insert our Rack ID to proper location in the rack_ids array:
+  INFO(NCCL_INIT, "OMER: nNodes = %d. nranks = %d, comm->nRanks = %d. comm->maxLocalRanks = %d", comm->nNodes, nranks, comm->nRanks, comm->maxLocalRanks);
+  NCCLCHECKGOTO(ncclCalloc(&rack_ids, comm->nNodes), ret, fail);
+  // int rack_id = comm->rackId;
+  for (int r = 0; r < comm->nRanks; r++) {
+    rack_ids[comm->rankToNode[r]] = allGather3Data[r].rack_id;
+  }
+  // rack_ids[comm->node] = comm->rackId;
+  // for (int r = 0; r < comm->maxLocalRanks; r++) {
+  //   // INFO(NCCL_INIT, "OMER: r = %d, ->localRankToRank[r] = %d.", comm->nNodes, ->localRankToRank[r]);
+  // rack_ids[comm->localRankToRank[r]] = comm->rackId;
+  // }
+
+  //Print rankToNode array:
+  char line_debug[1024];
+  for (int r=0, offset = 0; r<comm->nRanks; r++) {
+    int node = comm->rankToNode[r];
+    sprintf(line_debug + offset, "%d ", node);
+    offset = strlen(line_debug);
+  }
+  INFO(NCCL_INIT, "rankToNode: ");
+  INFO(NCCL_INIT, "%s", line_debug);
+  // Now, AllGather:
+  NCCLCHECKGOTO(bootstrapAllGather(comm->bootstrap, rack_ids, sizeof(*rack_ids)), ret, fail);
 
   NCCLCHECKGOTO(ncclCalloc(&rings, nranks*MAXCHANNELS), ret, fail);
-  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs), ret, fail);
-  // AllGather3 - end
+  NCCLCHECKGOTO(ncclTopoPostset(comm, nodesFirstRank, nodesTreePatterns, allTopoRanks, rings, graphs, rack_ids), ret, fail);
+
+
+  
 
   TRACE(NCCL_INIT, "rank %d nranks %d - BUILT %d TREES/RINGS", rank, nranks, comm->nChannels);
 
@@ -1107,6 +1136,16 @@ static ncclResult_t initTransportsRank(struct ncclComm* comm, struct ncclComm* p
     NCCLCHECKGOTO(setupChannel(comm, c, rank, nranks, rings+c*nranks), ret, fail);
     if (comm->nRanks == 1) continue;
     NCCLCHECKGOTO(ncclTransportP2pConnect(comm, c, 1, &channel->ring.prev, 1, &channel->ring.next, 0), ret, fail);
+
+    //Print channel's created Ring:
+    char line_ring[1024];
+    for (int r = 0, offset = 0; r < comm->nRanks; r++) {
+      sprintf(line_ring + offset, "%d ", channel->ring.userRanks[r]);
+      offset = strlen(line_ring);
+    }
+    INFO(NCCL_INIT, "Created ring for channel %d:", c);
+    INFO(NCCL_INIT, "%s", line_ring);
+
   }
   NCCLCHECKGOTO(ncclTransportP2pSetup(comm, &ringGraph, 0), ret, fail);
   INFO(NCCL_INIT, "Connected all rings");
@@ -1268,6 +1307,7 @@ exit:
   free(rings);
   free(nvbPeers);
   free(pxnPeers);
+  free(rack_ids);
   return ret;
 fail:
   goto exit;
