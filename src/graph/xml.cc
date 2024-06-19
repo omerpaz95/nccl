@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <float.h>
 #include "core.h"
 #include "nvmlwrap.h"
 #include "xml.h"
@@ -312,6 +313,7 @@ ncclResult_t ncclTopoGetXmlFromFile(const char* xmlTopoFile, struct ncclXml* xml
     }
     return ncclSuccess;
   }
+  INFO(NCCL_GRAPH, "This is a custom dev build.");
   INFO(NCCL_GRAPH, "Loading topology file %s", xmlTopoFile);
   struct xmlHandler handlers[] = { { "system", ncclTopoXmlLoadSystem } };
   xml->maxIndex = 0;
@@ -500,11 +502,11 @@ ncclResult_t ncclTopoGetXmlFromSys(struct ncclXmlNode* pciNode, struct ncclXml* 
   if (index == -1) {
     if (path) {
       char deviceSpeedStr[MAX_STR_LEN];
-      float deviceSpeed;
+      float deviceSpeed = FLT_MAX;
       NCCLCHECK(ncclTopoGetStrFromSys(path, "max_link_speed", deviceSpeedStr));
       sscanf(deviceSpeedStr, "%f GT/s", &deviceSpeed);
       char portSpeedStr[MAX_STR_LEN];
-      float portSpeed;
+      float portSpeed = FLT_MAX;
       NCCLCHECK(ncclTopoGetStrFromSys(path, "../max_link_speed", portSpeedStr));
       sscanf(portSpeedStr, "%f GT/s", &portSpeed);
       NCCLCHECK(xmlSetAttr(pciNode, "link_speed", portSpeed < deviceSpeed ? portSpeedStr : deviceSpeedStr));

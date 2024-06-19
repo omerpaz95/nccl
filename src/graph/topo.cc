@@ -250,11 +250,12 @@ ncclResult_t ncclTopoConnectCpus(struct ncclTopoSystem* system) {
 
 static ncclResult_t ncclTopoPrintRec(struct ncclTopoNode* node, struct ncclTopoNode* prevNode, char* line, int offset) {
   if (node->type == GPU) {
-    sprintf(line+offset, "%s/%lX (%d)", topoNodeTypeStr[node->type], node->id, node->gpu.rank);
+    // sprintf(line+offset, "%s/%lX (%d)", topoNodeTypeStr[node->type], node->id, node->gpu.rank);
+    sprintf(line+offset, "%s/%lX (%d) rack_id %d", topoNodeTypeStr[node->type], node->id, node->gpu.rank, node->rackId);
   } else if (node->type == CPU) {
     sprintf(line+offset, "%s/%lX (%d/%d/%d)", topoNodeTypeStr[node->type], node->id, node->cpu.arch, node->cpu.vendor, node->cpu.model);
   } else if (node->type == PCI) {
-    sprintf(line+offset, "%s/%lX (%lx)", topoNodeTypeStr[node->type], node->id, node->pci.device);
+    sprintf(line+offset, "%s/%lX (%lx) rack_id %d", topoNodeTypeStr[node->type], node->id, node->pci.device, node->rackId);
   } else {
     sprintf(line+offset, "%s/%lX", topoNodeTypeStr[node->type], node->id);
   }
@@ -440,6 +441,10 @@ ncclResult_t ncclTopoAddPci(struct ncclXmlNode* xmlPci, struct ncclTopoSystem* s
 
     NCCLCHECK(ncclTopoConnectNodes(node, parent, LINK_PCI, width*speed/80.0));
     NCCLCHECK(ncclTopoConnectNodes(parent, node, LINK_PCI, width*speed/80.0));
+    //Omer: Solution 1: Add rackID to node:
+    int rack_id;
+    NCCLCHECK(xmlGetAttrInt(xmlPci, "rack_id", &rack_id));
+    node->rackId = rack_id;
   }
   return ncclSuccess;
 }
@@ -475,6 +480,12 @@ ncclResult_t ncclTopoAddCpu(struct ncclXmlNode* xmlCpu, struct ncclTopoSystem* s
       if (familyId == 7 && modelId == 0x5B) cpu->cpu.model = NCCL_TOPO_CPU_TYPE_YONGFENG;
     }
   }
+
+  //Omer: Solution 1: Add rackID to node:
+  int rack_id;
+  NCCLCHECK(xmlGetAttrInt(xmlCpu, "rack_id", &rack_id));
+  cpu->rackId = rack_id;
+
   for (int s=0; s<xmlCpu->nSubs; s++) {
     struct ncclXmlNode* node = xmlCpu->subs[s];
     if (strcmp(node->name, "pci") == 0) NCCLCHECK(ncclTopoAddPci(node, system, cpu));
@@ -709,6 +720,7 @@ ncclResult_t ncclTopoGetSystem(struct ncclComm* comm, struct ncclTopoSystem** sy
   }
 
   NCCLCHECK(ncclTopoGetSystemFromXml(xml, system));
+  comm->rackId = (*system)->nodes[CPU].nodes[0].rackId;
   free(xml);
   return ncclSuccess;
 }

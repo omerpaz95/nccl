@@ -133,6 +133,8 @@ struct ncclTopoNode {
       uint64_t device;
     }pci;
   };
+  //Omer: Solution 1:
+  int rackId;
   int nlinks;
   struct ncclTopoLink links[NCCL_TOPO_MAX_LINKS];
   // Pre-computed paths to GPUs and NICs

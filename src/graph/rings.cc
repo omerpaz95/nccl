@@ -53,5 +53,6 @@ ncclResult_t ncclBuildRings(int nrings, int* rings, int rank, int nranks, int* p
       }
     }
   }
+  INFO(NCCL_GRAPH, "Done BuildRings.");
   return ncclSuccess;
 }

@@ -107,7 +107,7 @@ struct ncclTopoRanks {
 ncclResult_t ncclTopoPreset(struct ncclComm* comm, struct ncclTopoGraph** graphs, struct ncclTopoRanks* topoRanks);
 
 ncclResult_t ncclTopoPostset(struct ncclComm* comm, int* firstRanks, int* treePatterns,
-    struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph** graphs);
+    struct ncclTopoRanks** allTopoRanks, int* rings, struct ncclTopoGraph** graphs, int* rack_ids);
 
 ncclResult_t ncclTopoTuneModel(struct ncclComm* comm, int minCompCap, int maxCompCap, struct ncclTopoGraph** graphs);
 #include "info.h"
